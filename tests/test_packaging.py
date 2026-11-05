@@ -27,6 +27,7 @@ def test_mac_bundle_has_gui_metadata_and_an_executable(binary, tmp_path):
     app = stage_mac(binary, destination, "1.2.3")
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     assert info["LSUIElement"] is True
+    assert info["CFBundleExecutable"] == "sidekick"
     assert info["CFBundleIdentifier"] == "dev.HostAgent.HostAgent"
     assert info["CFBundleShortVersionString"] == "1.2.3"
     assert info["NSAppleEventsUsageDescription"]
@@ -52,9 +53,9 @@ def test_zip_preserves_package_layout(binary, tmp_path):
     archive = tmp_path / "app.zip"
     zip_tree(destination, archive)
     with zipfile.ZipFile(archive) as package:
-        assert "Sidekick.app/Contents/MacOS/host-agent" in package.namelist()
+        assert "Sidekick.app/Contents/MacOS/sidekick" in package.namelist()
         assert all(not name.startswith("/") for name in package.namelist())
-        mode = package.getinfo("Sidekick.app/Contents/MacOS/host-agent").external_attr >> 16
+        mode = package.getinfo("Sidekick.app/Contents/MacOS/sidekick").external_attr >> 16
         assert mode & 0o111
 
 
@@ -74,12 +75,16 @@ def test_linux_install_uninstall_handles_special_paths_and_preserves_config(bina
     data = tmp_path / "data space $cash% and `tick`"
     config = tmp_path / "config"
     env = {**os.environ, "XDG_DATA_HOME": str(data), "XDG_CONFIG_HOME": str(config)}
+    legacy = data / "host-agent/host-agent"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("old executable")
     subprocess.run(["sh", str(bundle / "install.sh")], env=env, check=True, capture_output=True)
-    installed = data / "host-agent/host-agent"
+    installed = data / "host-agent/sidekick"
     assert installed.read_bytes() == binary.read_bytes()
     desktop = (data / "applications/host-agent.desktop").read_text()
     assert desktop_argument(desktop) == str(installed)
     assert "Terminal=false" in desktop
+    assert not (data / "host-agent/host-agent").exists()
     assert not (config / "autostart").exists()  # Startup remains opt-in.
     keep = config / "hostagent/config.json"
     keep.parent.mkdir(parents=True)
@@ -99,7 +104,7 @@ def test_debian_package_has_expected_layout_and_no_automatic_startup(binary, tmp
     control = (root / "DEBIAN/control").read_text()
     assert "Architecture: amd64" in control
     assert "Version: 1.2.3" in control
-    assert (root / "usr/bin/host-agent").read_bytes() == binary.read_bytes()
+    assert (root / "usr/bin/sidekick").read_bytes() == binary.read_bytes()
     assert (root / "usr/share/applications/host-agent.desktop").is_file()
     assert not (root / "etc/xdg/autostart").exists()
 

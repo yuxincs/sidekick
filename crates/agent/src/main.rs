@@ -74,7 +74,7 @@ fn show_error(message: &str) {
 fn run(args: Vec<String>) -> Result<()> {
     if args.iter().any(|a| a == "--help") {
         println!(
-            "host-agent [--headless] [--config-dir PATH]\nPair through the tray menu: Connection settings."
+            "sidekick [--headless] [--config-dir PATH]\nPair through the tray menu: Connection settings."
         );
         return Ok(());
     }

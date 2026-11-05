@@ -36,7 +36,7 @@ jobs:
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
           cargo build --release --locked --target aarch64-apple-darwin
           cargo build --release --locked --target x86_64-apple-darwin
-          python3 scripts/package.py --platform macos --arch universal --binary target/aarch64-apple-darwin/release/host-agent --second-binary target/x86_64-apple-darwin/release/host-agent
+          python3 scripts/package.py --platform macos --arch universal --binary target/aarch64-apple-darwin/release/sidekick --second-binary target/x86_64-apple-darwin/release/sidekick
       - name: Build Windows app and per-user installer
         if: matrix.platform == 'windows'
         shell: pwsh
@@ -44,13 +44,13 @@ jobs:
           choco install nsis -y --no-progress
           cargo build --release --locked --target x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          python scripts/package.py --platform windows --arch x86_64 --binary target/x86_64-pc-windows-msvc/release/host-agent.exe
+          python scripts/package.py --platform windows --arch x86_64 --binary target/x86_64-pc-windows-msvc/release/sidekick.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build Linux desktop packages
         if: matrix.platform == 'linux'
         run: |
           cargo build --release --locked
-          python3 scripts/package.py --platform linux --arch x86_64 --binary target/release/host-agent
+          python3 scripts/package.py --platform linux --arch x86_64 --binary target/release/sidekick
           dpkg-deb --info dist/*.deb
       - uses: actions/upload-artifact@v4
         with:

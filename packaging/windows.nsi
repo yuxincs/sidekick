@@ -22,7 +22,7 @@ SetCompressor /SOLID lzma
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-!define MUI_FINISHPAGE_RUN "$INSTDIR\host-agent.exe"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\sidekick.exe"
 !define MUI_FINISHPAGE_RUN_TEXT "Launch Sidekick (configure startup in the tray)"
 !insertmacro MUI_PAGE_FINISH
 !insertmacro MUI_UNPAGE_CONFIRM
@@ -32,9 +32,14 @@ SetCompressor /SOLID lzma
 Section "Sidekick" SEC_MAIN
   SetShellVarContext current
   SetOutPath "$INSTDIR"
+  ; Remove the old executable name during upgrades, refusing to update a running copy.
+  Delete "$INSTDIR\host-agent.exe"
+  IfFileExists "$INSTDIR\host-agent.exe" 0 +3
+    MessageBox MB_OK|MB_ICONSTOP "Quit Sidekick from its tray menu before installing an update."
+    Abort
   SetOverwrite try
   ClearErrors
-  File /oname=host-agent.exe "${BINARY}"
+  File /oname=sidekick.exe "${BINARY}"
   IfErrors 0 +3
     MessageBox MB_OK|MB_ICONSTOP "Quit Sidekick from its tray menu before installing an update."
     Abort
@@ -44,7 +49,7 @@ Section "Sidekick" SEC_MAIN
   Delete "$SMPROGRAMS\Host Agent\Uninstall.lnk"
   RMDir "$SMPROGRAMS\Host Agent"
   CreateDirectory "$SMPROGRAMS\Sidekick"
-  CreateShortcut "$SMPROGRAMS\Sidekick\Sidekick.lnk" "$INSTDIR\host-agent.exe"
+  CreateShortcut "$SMPROGRAMS\Sidekick\Sidekick.lnk" "$INSTDIR\sidekick.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   CreateShortcut "$SMPROGRAMS\Sidekick\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\HostAgent" "DisplayName" "Sidekick"
@@ -57,10 +62,11 @@ SectionEnd
 
 Section "Uninstall"
   SetShellVarContext current
-  Delete "$INSTDIR\host-agent.exe"
-  IfFileExists "$INSTDIR\host-agent.exe" 0 +3
+  Delete "$INSTDIR\sidekick.exe"
+  IfFileExists "$INSTDIR\sidekick.exe" 0 +3
     MessageBox MB_OK|MB_ICONSTOP "Quit Sidekick from its tray menu before uninstalling."
     Abort
+  Delete "$INSTDIR\host-agent.exe"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "dev.HostAgent.HostAgent"
   Delete "$SMPROGRAMS\Sidekick\Sidekick.lnk"
   Delete "$SMPROGRAMS\Sidekick\Uninstall.lnk"

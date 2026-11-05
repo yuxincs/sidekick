@@ -1380,33 +1380,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
-name = "host-agent"
-version = "0.2.0"
-dependencies = [
- "anyhow",
- "directories",
- "eframe",
- "fs2",
- "host-agent-core",
- "objc2 0.6.5",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "plist",
- "security-framework",
- "serde",
- "serde_json",
- "sysinfo",
- "tempfile",
- "tokio",
- "tray-icon",
- "uuid",
- "windows 0.62.2",
- "windows-sys 0.61.2",
- "winit",
- "winreg",
-]
-
-[[package]]
 name = "host-agent-core"
 version = "0.2.0"
 dependencies = [
@@ -3060,6 +3033,33 @@ name = "shlex"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+
+[[package]]
+name = "sidekick"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "directories",
+ "eframe",
+ "fs2",
+ "host-agent-core",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "plist",
+ "security-framework",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tempfile",
+ "tokio",
+ "tray-icon",
+ "uuid",
+ "windows 0.62.2",
+ "windows-sys 0.61.2",
+ "winit",
+ "winreg",
+]
 
 [[package]]
 name = "signal-hook-registry"

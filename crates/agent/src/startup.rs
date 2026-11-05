@@ -112,10 +112,10 @@ impl StartupControl for NativeStartup {
             .create_subkey("Software\\Microsoft\\Windows\\CurrentVersion\\Run")?;
         if enabled {
             key.set_value(ID, &self.command)?;
-        } else if let Err(error) = key.delete_value(ID) {
-            if error.kind() != std::io::ErrorKind::NotFound {
-                return Err(error.into());
-            }
+        } else if let Err(error) = key.delete_value(ID)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(error.into());
         }
         Ok(())
     }
@@ -179,7 +179,7 @@ mod tests {
     use super::*;
     #[test]
     fn mac_registration_is_valid_xml_and_preserves_special_paths() {
-        let path = "/Applications/A & B <test>/Sidekick.app/Contents/MacOS/host-agent";
+        let path = "/Applications/A & B <test>/Sidekick.app/Contents/MacOS/sidekick";
         let value = plist::Value::from_reader(std::io::Cursor::new(launch_agent(path))).unwrap();
         let dictionary = value.as_dictionary().unwrap();
         let arguments = dictionary["ProgramArguments"].as_array().unwrap();
@@ -191,13 +191,13 @@ mod tests {
     #[test]
     fn windows_paths_are_quoted_and_have_only_the_startup_flag() {
         assert_eq!(
-            windows_command(r"C:\Users\A B\Sidekick\host-agent.exe"),
-            r#""C:\Users\A B\Sidekick\host-agent.exe" --autostart"#
+            windows_command(r"C:\Users\A B\Sidekick\sidekick.exe"),
+            r#""C:\Users\A B\Sidekick\sidekick.exe" --autostart"#
         );
     }
     #[test]
     fn linux_exec_uses_both_desktop_escaping_levels() {
-        let entry = desktop_entry("/home/a b/$cash%/back`tick/host-agent");
+        let entry = desktop_entry("/home/a b/$cash%/back`tick/sidekick");
         let exec = entry
             .lines()
             .find_map(|line| line.strip_prefix("Exec="))
@@ -213,7 +213,7 @@ mod tests {
             .replace("\\$", "$")
             .replace("\\`", "`")
             .replace("%%", "%");
-        assert_eq!(decoded, "/home/a b/$cash%/back`tick/host-agent");
+        assert_eq!(decoded, "/home/a b/$cash%/back`tick/sidekick");
     }
     #[test]
     fn atomic_registration_replaces_old_content() {

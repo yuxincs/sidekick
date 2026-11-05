@@ -55,7 +55,7 @@ def png(size: int) -> bytes:
 
 def stage_mac(binary: Path, destination: Path, version: str) -> Path:
     app = destination / "Sidekick.app"
-    executable = app / "Contents/MacOS/host-agent"
+    executable = app / "Contents/MacOS/sidekick"
     executable.parent.mkdir(parents=True)
     shutil.copy2(binary, executable)
     executable.chmod(0o755)
@@ -69,7 +69,7 @@ def stage_mac(binary: Path, destination: Path, version: str) -> Path:
         "CFBundleName": "Sidekick",
         "CFBundleDisplayName": "Sidekick",
         "CFBundleIdentifier": APP_ID,
-        "CFBundleExecutable": "host-agent",
+        "CFBundleExecutable": "sidekick",
         "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": version,
         "CFBundleVersion": version,
@@ -93,8 +93,8 @@ def zip_tree(source: Path, output: Path) -> None:
 def stage_linux(binary: Path, destination: Path) -> Path:
     folder = destination / "host-agent"
     folder.mkdir()
-    shutil.copy2(binary, folder / "host-agent")
-    (folder / "host-agent").chmod(0o755)
+    shutil.copy2(binary, folder / "sidekick")
+    (folder / "sidekick").chmod(0o755)
     for source, target in (
         ("install-linux.sh", "install.sh"),
         ("uninstall-linux.sh", "uninstall.sh"),
@@ -111,7 +111,7 @@ def stage_linux(binary: Path, destination: Path) -> Path:
 
 def package_mac(args, stage: Path, prefix: str) -> None:
     app = stage_mac(args.binary, stage, args.version)
-    executable = app / "Contents/MacOS/host-agent"
+    executable = app / "Contents/MacOS/sidekick"
     if args.second_binary:
         merged = stage / "universal-binary"
         subprocess.run(
@@ -166,10 +166,10 @@ def package_mac(args, stage: Path, prefix: str) -> None:
 
 
 def package_windows(args, stage: Path, prefix: str) -> None:
-    shutil.copy2(args.binary, stage / "host-agent.exe")
+    shutil.copy2(args.binary, stage / "sidekick.exe")
     shutil.copy2(ROOT / "LICENSE", stage)
     (stage / "README.txt").write_text(
-        "Run host-agent.exe from a permanent location, or use the installer.\nConfigure capabilities, pairing, and Start at login from its tray.\nQuit before installing updates.\n"
+        "Run sidekick.exe from a permanent location, or use the installer.\nConfigure capabilities, pairing, and Start at login from its tray.\nQuit before installing updates.\n"
     )
     zip_tree(stage, args.out / f"{prefix}.zip")
     compiler = shutil.which("makensis")
@@ -202,12 +202,12 @@ def stage_deb(binary: Path, destination: Path, version: str, arch: str) -> Path:
         "usr/share/doc/host-agent",
     ):
         (deb / folder).mkdir(parents=True, exist_ok=True)
-    shutil.copy2(binary, deb / "usr/bin/host-agent")
-    (deb / "usr/bin/host-agent").chmod(0o755)
+    shutil.copy2(binary, deb / "usr/bin/sidekick")
+    (deb / "usr/bin/sidekick").chmod(0o755)
     shutil.copy2(ASSETS / "host-agent.svg", deb / "usr/share/icons/hicolor/scalable/apps/host-agent.svg")
     shutil.copy2(ROOT / "LICENSE", deb / "usr/share/doc/host-agent/copyright")
     (deb / "usr/share/applications/host-agent.desktop").write_text(
-        "[Desktop Entry]\nType=Application\nName=Sidekick\nComment=Local Home Assistant metrics and actions\nExec=/usr/bin/host-agent\nTryExec=/usr/bin/host-agent\nIcon=host-agent\nTerminal=false\nCategories=Utility;System;\n"
+        "[Desktop Entry]\nType=Application\nName=Sidekick\nComment=Local Home Assistant metrics and actions\nExec=/usr/bin/sidekick\nTryExec=/usr/bin/sidekick\nIcon=host-agent\nTerminal=false\nCategories=Utility;System;\n"
     )
     architecture = {"x86_64": "amd64", "aarch64": "arm64"}[arch]
     (deb / "DEBIAN/control").write_text(
