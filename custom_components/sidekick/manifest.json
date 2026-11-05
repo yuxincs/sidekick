@@ -8,5 +8,10 @@
   "requirements": [],
   "dependencies": [
     "http"
+  ],
+  "documentation": "https://github.com/yuxincs/sidekick#readme",
+  "issue_tracker": "https://github.com/yuxincs/sidekick/issues",
+  "codeowners": [
+    "@yuxincs"
   ]
 }

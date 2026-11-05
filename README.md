@@ -6,7 +6,7 @@ Sidekick uses a one-time pairing code and administrator approval in Home Assista
 
 ## Pair a computer
 
-1. Extract the integration archive into your Home Assistant configuration directory so `custom_components/sidekick` exists. Restart Home Assistant.
+1. In Marketplace/HACS, add `https://github.com/yuxincs/sidekick` as a custom repository of type **Integration**, then install Sidekick and restart Home Assistant. Alternatively, extract the integration archive into your Home Assistant configuration directory so `custom_components/sidekick` exists, then restart. Install the desktop app separately on each computer.
 2. Make sure your Home Assistant HTTPS address works with a trusted certificate, either on HASS itself or through a TLS reverse proxy. With a proxy, configure Home Assistant's trusted proxies and forwarded headers correctly. Both pairing and device endpoints reject plain HTTP.
 3. In **Settings → Devices & services → Add integration → Sidekick**, a four-group pairing code appears. It expires after five minutes.
 4. Launch Sidekick. Its first launch opens a native Connection settings window; you can also open it from the S tray/menu-bar icon. Enter your HASS HTTPS address and the pairing code.
