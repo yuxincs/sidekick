@@ -1,0 +1,40 @@
+{
+  "title": "Sidekick",
+  "config": {
+    "step": {
+      "pair": {
+        "title": "Pair a computer",
+        "description": "In Sidekick's tray, open **Connection settings**, enter your Home Assistant HTTPS address and this pairing code:\n\n**{code}**\n\nThe code expires in five minutes. Once Sidekick shows a confirmation number, select **Submit** to review the computer.",
+        "data": {}
+      },
+      "confirm": {
+        "title": "Approve {name}",
+        "description": "**{name}** \u00b7 {os}\n\nSidekick must show this same confirmation number: **{comparison}**.\n\nApprove only the computer you are pairing. Local permissions stay controlled in Sidekick.",
+        "data": {
+          "verified": "I verified the confirmation number on this computer"
+        }
+      }
+    },
+    "error": {
+      "waiting_for_device": "Waiting for Sidekick. Enter the code in its Connection settings, then try again.",
+      "pairing_expired": "The previous pairing expired or disconnected. Use the new code below.",
+      "confirmation_required": "Verify the matching confirmation number before approving."
+    },
+    "abort": {
+      "already_configured": "This computer is already paired. Use Reconfigure to replace its pairing.",
+      "too_many_pairings": "Too many active pairing attempts. Wait five minutes and try again.",
+      "reconfigure_successful": "Pairing replaced."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sidekick connection",
+        "description": "Revoking immediately disconnects this computer. Use Reconfigure to pair it again. Metric, shutdown, and audio permissions are controlled in the Sidekick tray.",
+        "data": {
+          "revoke": "Revoke this computer's pairing"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+[project]
+name = "host-agent-integration-tests"
+version = "0.2.0"
+license = "Apache-2.0"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest-homeassistant-custom-component", "pytest-aiohttp", "ruff"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

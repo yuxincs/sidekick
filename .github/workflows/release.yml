@@ -1,0 +1,59 @@
+name: Desktop packages
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  package:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            arch: universal
+          - os: windows-latest
+            platform: windows
+            arch: x86_64
+          - os: ubuntu-22.04
+            platform: linux
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: cargo test --workspace --locked
+      - name: Build universal macOS app
+        if: matrix.platform == 'macos'
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          python3 scripts/package.py --platform macos --arch universal --binary target/aarch64-apple-darwin/release/host-agent --second-binary target/x86_64-apple-darwin/release/host-agent
+      - name: Build Windows app and per-user installer
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          cargo build --release --locked --target x86_64-pc-windows-msvc
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/package.py --platform windows --arch x86_64 --binary target/x86_64-pc-windows-msvc/release/host-agent.exe
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build Linux desktop packages
+        if: matrix.platform == 'linux'
+        run: |
+          cargo build --release --locked
+          python3 scripts/package.py --platform linux --arch x86_64 --binary target/release/host-agent
+          dpkg-deb --info dist/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sidekick-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
+          if-no-files-found: error

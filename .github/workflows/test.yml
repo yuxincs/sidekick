@@ -1,0 +1,37 @@
+name: Test
+on: [push, pull_request]
+jobs:
+  rust:
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: cargo build --release --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sidekick-${{ matrix.os }}
+          path: |
+            target/release/host-agent
+            target/release/host-agent.exe
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p host-agent-core --example test_agent --locked
+      - run: cargo build -p host-agent --locked
+      - run: uv sync --locked --python 3.13
+      - run: uv run ruff check custom_components tests scripts
+      - run: uv run ruff format --check custom_components tests scripts
+      - run: uv run pytest -q

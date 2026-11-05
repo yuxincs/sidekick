@@ -1,0 +1,12 @@
+{
+  "domain": "sidekick",
+  "name": "Sidekick",
+  "version": "0.2.0",
+  "config_flow": true,
+  "integration_type": "device",
+  "iot_class": "local_push",
+  "requirements": [],
+  "dependencies": [
+    "http"
+  ]
+}
