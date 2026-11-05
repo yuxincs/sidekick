@@ -150,6 +150,9 @@ fn old_config_migrates_without_losing_device_or_permissions() {
 #[derive(Default)]
 struct AudioStub(std::sync::atomic::AtomicBool);
 impl AudioControl for AudioStub {
+    fn subscribe(&self) -> anyhow::Result<host_agent_core::audio::AudioSubscription> {
+        anyhow::bail!("Action-only test")
+    }
     fn muted(&self) -> anyhow::Result<bool> {
         Ok(self.0.load(std::sync::atomic::Ordering::SeqCst))
     }
@@ -172,7 +175,7 @@ fn audio_is_opt_in_reports_real_state_and_never_changes_volume() {
         })
         .unwrap();
     agent.refresh();
-    assert_eq!(agent.subscribe().borrow().metrics.audio_muted, Some(false));
+    assert!(agent.subscribe().borrow().metrics.audio_muted.is_none());
     agent.execute("mute", "mute", deadline()).unwrap();
     assert_eq!(agent.subscribe().borrow().metrics.audio_muted, Some(true));
     assert!(agent.execute("mute", "unmute", deadline()).is_err());
@@ -188,6 +191,9 @@ fn audio_is_opt_in_reports_real_state_and_never_changes_volume() {
 fn audio_errors_remain_unknown_and_disabled_audio_is_never_queried() {
     struct Unavailable(AtomicUsize);
     impl AudioControl for Unavailable {
+        fn subscribe(&self) -> anyhow::Result<host_agent_core::audio::AudioSubscription> {
+            anyhow::bail!("No output")
+        }
         fn muted(&self) -> anyhow::Result<bool> {
             self.0.fetch_add(1, Ordering::SeqCst);
             anyhow::bail!("No output")
@@ -220,7 +226,7 @@ fn audio_errors_remain_unknown_and_disabled_audio_is_never_queried() {
         })
         .unwrap();
     agent.refresh();
-    assert_eq!(audio.0.load(Ordering::SeqCst), 1);
+    assert_eq!(audio.0.load(Ordering::SeqCst), 0);
     assert!(agent.execute("failed", "mute", deadline()).is_err());
     assert!(agent.subscribe().borrow().metrics.audio_muted.is_none());
 }
@@ -250,5 +256,5 @@ fn expired_audio_actions_never_reach_the_os() {
             .contains("expired")
     );
     agent.refresh();
-    assert_eq!(agent.subscribe().borrow().metrics.audio_muted, Some(false));
+    assert!(agent.subscribe().borrow().metrics.audio_muted.is_none());
 }

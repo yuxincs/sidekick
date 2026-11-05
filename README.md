@@ -33,7 +33,7 @@ Standalone apps need no Rust or Python installation. macOS uses OS frameworks; W
 
 Shutdown uses Windows shutdown.exe, macOS System Events, or systemctl poweroff on Linux. It does not elevate privileges or install a privileged helper. macOS may request Automation permission; Linux requires systemd and local power-management authorization. A failed OS command reports an error to HASS. Requests expire after ten seconds and are never replayed on reconnect; severely skewed clocks are rejected. A machine may power off before its acknowledgement arrives, so HASS may report an unknown outcome.
 
-Speaker mute controls the default playback output, never the microphone or volume level. The permission also exposes its current mute state, refreshed with each sample and immediately after an action. macOS uses CoreAudio; Windows uses the endpoint-volume API; Linux requires `wpctl` (WirePlumber) or `pactl` (PulseAudio). Outputs without mute support or a working audio session appear unavailable. Audio permission defaults to off, including after an upgrade.
+Speaker mute controls the default playback output, never the microphone or volume level. The permission also exposes its current mute state, updated through system notifications and immediately after an action. macOS uses CoreAudio property listeners; Windows uses endpoint-volume and default-device callbacks. Linux uses a persistent `pw-dump --monitor` stream with `wpctl` (PipeWire/WirePlumber), or `pactl subscribe` (PulseAudio or PipeWire's PulseAudio compatibility service). Linux needs `wpctl` plus `pw-dump`, or `pactl`. A healthy audio subscription is never polled. Subscription failures clear the mute state and retry with backoff; default-output changes reattach the native listeners. Disabling audio sharing detaches its subscription. Outputs without mute support or a working audio session appear unavailable. Audio permission defaults to off, including after an upgrade.
 
 ## Revoke, disconnect, or pair again
 
@@ -60,6 +60,7 @@ Production device connections always use WSS, system-trusted roots, and normal h
 
 ```text
 crates/agent-core/
+  audio.rs          coalesced notifications and subscription lifetimes
   config.rs         stable identity, exposure policy, enrollment reference
   credentials.rs    pluggable secret-storage interface and private-file fallback
   connection.rs     outbound pairing, credential handoff, push, reconnect
@@ -72,7 +73,8 @@ crates/agent/
   startup.rs        per-user OS login registration
   metrics.rs        shared sysinfo CPU/RAM implementation
   power.rs          OS-specific shutdown behind PowerControl
-  audio.rs          OS-specific mute state/control behind AudioControl
+  audio.rs          shared audio adapter and native worker lifetime
+  audio/            native callbacks and Linux event stream adapters
 custom_components/sidekick/
   pairing.py        HASS HTTP views, enrollment and device sessions
   config_flow.py    pairing, confirmation, re-pairing, revocation options
@@ -83,7 +85,7 @@ custom_components/sidekick/
   switch.py         permission-aware playback mute switch
 ```
 
-HASS reuses its HTTP listener and aiohttp WebSockets. `/api/sidekick/pair` accepts only pairing traffic; `/api/sidekick/ws` authenticates device credentials before upgrade using Authorization and X-Sidekick-Device headers. The first authenticated message identifies the HASS instance, followed by a complete snapshot from Sidekick. Messages and action responses are bounded at 4 KiB. Snapshots are pushed every five seconds by default, and immediately when exposure changes. CPU requires a warmup sample.
+HASS reuses its HTTP listener and aiohttp WebSockets. `/api/sidekick/pair` accepts only pairing traffic; `/api/sidekick/ws` authenticates device credentials before upgrade using Authorization and X-Sidekick-Device headers. The first authenticated message identifies the HASS instance, followed by a complete snapshot from Sidekick. Messages and action responses are bounded at 4 KiB. Snapshots are pushed every five seconds by default, and immediately when exposure or mute state changes. CPU requires a warmup sample.
 
 Ping/pong checks run every 15 seconds; silent peers time out. Sidekick reconnects with exponential delays capped at 60 seconds and sends a fresh snapshot. Action IDs, expiration, up to four workers per connection, and local permission checks prevent automatic replay or delayed shutdown. HASS never polls for metrics or opens a connection to a desktop.
 
@@ -103,7 +105,9 @@ uv run ruff format --check custom_components tests scripts
 uv run pytest -q
 ```
 
-The test agent is a loopback-only test harness with deterministic metrics and harmless fake power and audio backends. Tests cover the real Rust client and HASS pairing/config-flow/entity lifecycle, TLS trust and rejection, native pairing input validation, audio permissions and state, approval failures, expired/reused codes, wrong-device credentials, reconnects, revocation, migration, and stale actions. No test requests a real OS shutdown, changes host audio, or modifies the user's startup settings.
+The test agent is a loopback-only test harness with deterministic metrics and harmless fake power and audio backends. Tests cover the real Rust client and HASS pairing/config-flow/entity lifecycle, TLS trust and rejection, native pairing input validation, audio permissions and state, approval failures, expired/reused codes, wrong-device credentials, reconnects, revocation, migration, and stale actions. Audio tests cover event delivery without metrics ticks, permission changes, stale in-flight reads, device rebinding, stream failure/recovery, and Linux event filtering. No test requests a real OS shutdown, changes host audio, or modifies the user's startup settings.
+
+For a read-only native audio check, run `cargo run -p sidekick --example audio_watch -- 30` and change mute using your keyboard or system settings. It prints subscription updates and detaches after 30 seconds; it never changes audio itself.
 
 Run `cargo run -p sidekick` for the tray, or `sidekick --headless --config-dir PATH`. Headless mode runs an existing enrollment without a settings window or tray; pair and configure through the desktop app first. Release workflow builds native desktop packages on macOS, Windows, and Linux. Package generation uses Python 3.11+: `uv run python scripts/package.py --platform macos --arch aarch64 --binary target/release/sidekick`. Universal macOS builds additionally take `--arch universal --second-binary <intel-binary>`; Windows needs NSIS, Linux needs dpkg-deb. Outputs, integration ZIP, licenses, and checksums are in dist/.
 

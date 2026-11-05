@@ -127,6 +127,7 @@ fn run(args: Vec<String>) -> Result<()> {
         Arc::new(power::HostPower),
         Arc::new(audio::HostAudio),
     );
+    let audio_watcher = runtime.spawn(agent.clone().watch_audio());
     let worker = agent.clone();
     let sampler = runtime.spawn(async move {
         let mut interval =
@@ -156,6 +157,7 @@ fn run(args: Vec<String>) -> Result<()> {
     }
     connection_task.abort();
     sampler.abort();
+    audio_watcher.abort();
     runtime.shutdown_timeout(Duration::from_secs(2));
     Ok(())
 }

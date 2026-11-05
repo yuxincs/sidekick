@@ -51,6 +51,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(PowerStub),
         audio.clone(),
     );
+    tokio::spawn(agent.clone().watch_audio());
     agent.refresh();
     let connector = Connector::new(
         agent.clone(),
@@ -81,7 +82,8 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
-    let mut timer = tokio::time::interval(Duration::from_millis(250));
+    // Audio changes must reach HA without relying on a periodic metrics tick.
+    let mut timer = tokio::time::interval(Duration::from_secs(60));
     loop {
         tokio::select! {
             _ = timer.tick() => agent.refresh(),
@@ -98,13 +100,24 @@ async fn main() -> anyhow::Result<()> {
 }
 
 #[derive(Default)]
-struct AudioStub(std::sync::atomic::AtomicBool);
+struct AudioStub(
+    std::sync::atomic::AtomicBool,
+    std::sync::Mutex<Option<host_agent_core::audio::AudioNotifier>>,
+);
 impl AudioControl for AudioStub {
+    fn subscribe(&self) -> anyhow::Result<host_agent_core::audio::AudioSubscription> {
+        let (source, events) = host_agent_core::audio::audio_channel();
+        *self.1.lock().unwrap() = Some(source);
+        Ok(host_agent_core::audio::AudioSubscription::new(events, ()))
+    }
     fn muted(&self) -> anyhow::Result<bool> {
         Ok(self.0.load(std::sync::atomic::Ordering::SeqCst))
     }
     fn set_muted(&self, muted: bool) -> anyhow::Result<()> {
         self.0.store(muted, std::sync::atomic::Ordering::SeqCst);
+        if let Some(source) = self.1.lock().unwrap().as_ref() {
+            source.changed(false);
+        }
         Ok(())
     }
 }

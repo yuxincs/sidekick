@@ -1,4 +1,5 @@
 use crate::{
+    audio::AudioSubscription,
     config::{Config, Enrollment, Exposure},
     protocol::{Identity, Metrics, PROTOCOL_VERSION, Snapshot},
 };
@@ -22,6 +23,7 @@ pub trait PowerControl: Send + Sync {
 pub trait AudioControl: Send + Sync {
     fn muted(&self) -> Result<bool>;
     fn set_muted(&self, muted: bool) -> Result<()>;
+    fn subscribe(&self) -> Result<AudioSubscription>;
 }
 
 struct Inner {
@@ -29,6 +31,7 @@ struct Inner {
     metrics: Metrics,
     provider: Box<dyn MetricsProvider>,
     recent_actions: VecDeque<String>,
+    audio_generation: u64,
 }
 
 pub struct Agent {
@@ -38,6 +41,7 @@ pub struct Agent {
     power: Arc<dyn PowerControl>,
     audio: Arc<dyn AudioControl>,
     updates: watch::Sender<Snapshot>,
+    audio_policy: watch::Sender<u64>,
 }
 
 impl Agent {
@@ -57,18 +61,21 @@ impl Agent {
             metrics: Metrics::default(),
         };
         let (updates, _) = watch::channel(snapshot);
+        let (audio_policy, _) = watch::channel(0);
         Arc::new(Self {
             inner: Mutex::new(Inner {
                 config,
                 metrics: Metrics::default(),
                 provider,
                 recent_actions: VecDeque::new(),
+                audio_generation: 0,
             }),
             identity,
             config_path,
             power,
             audio,
             updates,
+            audio_policy,
         })
     }
 
@@ -117,9 +124,21 @@ impl Agent {
         let mut next = inner.config.clone();
         next.exposure = exposure;
         next.save(&self.config_path)?;
+        let audio_changed = inner.config.exposure.audio != exposure.audio;
+        let muted = if !audio_changed {
+            inner.metrics.audio_muted
+        } else {
+            None
+        };
         inner.config = next;
-        // Discard cached data on every policy change; fresh values arrive on the next sample.
-        inner.metrics = Metrics::default();
+        inner.metrics = Metrics {
+            audio_muted: muted,
+            ..Metrics::default()
+        };
+        if audio_changed {
+            inner.audio_generation = inner.audio_generation.wrapping_add(1);
+            self.audio_policy.send_replace(inner.audio_generation);
+        }
         self.publish(&inner);
         Ok(())
     }
@@ -127,13 +146,101 @@ impl Agent {
     pub fn refresh(&self) {
         let mut inner = self.inner.lock().unwrap();
         let exposure = inner.config.exposure;
+        let muted = inner.metrics.audio_muted;
         inner.metrics = inner.provider.sample(exposure);
-        inner.metrics.audio_muted = if exposure.audio {
-            self.audio.muted().ok()
-        } else {
-            None
-        };
+        // Audio belongs to its event subscription, never the CPU/RAM sampling timer.
+        inner.metrics.audio_muted = if exposure.audio { muted } else { None };
         self.publish(&inner);
+    }
+
+    fn audio_state(&self) -> (bool, u64) {
+        let inner = self.inner.lock().unwrap();
+        (inner.config.exposure.audio, inner.audio_generation)
+    }
+
+    fn publish_audio(&self, generation: u64, value: Option<bool>) {
+        let mut inner = self.inner.lock().unwrap();
+        if inner.config.exposure.audio
+            && inner.audio_generation == generation
+            && inner.metrics.audio_muted != value
+        {
+            inner.metrics.audio_muted = value;
+            self.publish(&inner);
+        }
+    }
+
+    async fn read_audio(self: &Arc<Self>, generation: u64) -> bool {
+        let audio = self.audio.clone();
+        let value = tokio::task::spawn_blocking(move || audio.muted().ok())
+            .await
+            .unwrap_or(None);
+        self.publish_audio(generation, value);
+        value.is_some()
+    }
+
+    /// Register first, read current state, then wait for notifications. Retries only
+    /// re-establish failed subscriptions; a healthy backend is never polled.
+    pub async fn watch_audio(self: Arc<Self>) {
+        use std::time::Duration;
+        let mut policy = self.audio_policy.subscribe();
+        let mut retry = Duration::from_secs(1);
+        loop {
+            policy.borrow_and_update();
+            let (enabled, generation) = self.audio_state();
+            if !enabled {
+                if policy.changed().await.is_err() {
+                    return;
+                }
+                continue;
+            }
+            let audio = self.audio.clone();
+            let subscription = tokio::select! {
+                _ = policy.changed() => continue,
+                result = tokio::task::spawn_blocking(move || audio.subscribe()) => result,
+            };
+            let mut reconnect_immediately = false;
+            if let Ok(Ok(mut subscription)) = subscription {
+                let mut initial = true;
+                let mut available = true;
+                loop {
+                    if initial {
+                        initial = false;
+                    } else {
+                        match tokio::select! {
+                            _ = policy.changed() => { reconnect_immediately = true; break; },
+                            event = subscription.events.next() => event,
+                            _ = tokio::time::sleep(retry), if !available => {
+                                retry = (retry * 2).min(Duration::from_secs(30));
+                                reconnect_immediately = true;
+                                break;
+                            },
+                        } {
+                            Some(true) => {
+                                reconnect_immediately = true;
+                                break;
+                            }
+                            Some(false) => {}
+                            None => break,
+                        }
+                    }
+                    available = tokio::select! {
+                        _ = policy.changed() => { reconnect_immediately = true; break; },
+                        healthy = self.read_audio(generation) => healthy,
+                    };
+                    if available {
+                        retry = Duration::from_secs(1);
+                    }
+                }
+            }
+            self.publish_audio(generation, None);
+            if reconnect_immediately {
+                continue;
+            }
+            tokio::select! {
+                _ = policy.changed() => {},
+                _ = tokio::time::sleep(retry) => { retry = (retry * 2).min(Duration::from_secs(30)); },
+            }
+        }
     }
 
     pub fn execute(&self, id: &str, action: &str, expires_at: u64) -> Result<()> {

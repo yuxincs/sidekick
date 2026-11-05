@@ -78,7 +78,15 @@ pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Res
             }
             // Creation runs on the event loop's main thread, after its native window exists.
             let tray = Tray::new(agent.clone())?;
+            let mut snapshots = agent.subscribe();
+            let repaint_ctx = cc.egui_ctx.clone();
+            let repaint = runtime.spawn(async move {
+                while snapshots.changed().await.is_ok() {
+                    repaint_ctx.request_repaint();
+                }
+            });
             Ok(Box::new(Settings {
+                repaint,
                 agent,
                 connector,
                 runtime,
@@ -97,6 +105,7 @@ pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Res
 }
 
 struct Settings {
+    repaint: tokio::task::JoinHandle<()>,
     agent: Arc<Agent>,
     connector: Arc<Connector>,
     runtime: Handle,
@@ -327,7 +336,11 @@ impl Settings {
                     p,
                 );
                 #[cfg(target_os = "linux")]
-                caption(ui, "Requires wpctl (WirePlumber) or pactl (PulseAudio).", p);
+                caption(
+                    ui,
+                    "Requires wpctl + pw-dump (PipeWire) or pactl (PulseAudio).",
+                    p,
+                );
             }
             divider(ui);
             changed |= switch_row(
@@ -382,6 +395,12 @@ impl Settings {
             let _ = tx.send(result);
             ctx.request_repaint();
         });
+    }
+}
+
+impl Drop for Settings {
+    fn drop(&mut self) {
+        self.repaint.abort();
     }
 }
 

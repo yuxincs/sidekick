@@ -3039,6 +3039,7 @@ name = "sidekick"
 version = "0.2.0"
 dependencies = [
  "anyhow",
+ "block2 0.6.2",
  "directories",
  "eframe",
  "fs2",
@@ -3056,6 +3057,7 @@ dependencies = [
  "tray-icon",
  "uuid",
  "windows 0.62.2",
+ "windows-core 0.62.2",
  "windows-sys 0.61.2",
  "winit",
  "winreg",
