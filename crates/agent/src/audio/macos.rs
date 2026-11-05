@@ -1,5 +1,6 @@
 use anyhow::{Result, ensure};
 use std::{ffi::c_void, ptr};
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 struct Address {
     selector: u32,
@@ -106,6 +107,13 @@ unsafe extern "C" {
         callback: *const Block<Callback>,
     ) -> i32;
 }
+fn property_matches(expected: Address, actual: Address) -> bool {
+    let wildcard = u32::from_be_bytes(*b"****");
+    (actual.selector == expected.selector || actual.selector == wildcard)
+        && (actual.scope == expected.scope || actual.scope == wildcard)
+        && (actual.element == expected.element || actual.element == u32::MAX)
+}
+
 struct Listener {
     object: u32,
     address: Address,
@@ -113,8 +121,21 @@ struct Listener {
 }
 impl Listener {
     fn new(object: u32, address: Address, source: AudioNotifier, rebind: bool) -> Result<Self> {
-        let callback: RcBlock<Callback> = RcBlock::new(move |_: u32, _: *const c_void| {
-            source.changed(rebind);
+        let expected = address;
+        let callback: RcBlock<Callback> = RcBlock::new(move |count: u32, data: *const c_void| {
+            if count == 0 || data.is_null() {
+                return;
+            }
+            // CoreAudio can batch unrelated property addresses into one callback.
+            // Its address array is valid only for the duration of this invocation.
+            let addresses =
+                unsafe { std::slice::from_raw_parts(data.cast::<Address>(), count as usize) };
+            if addresses
+                .iter()
+                .any(|actual| property_matches(expected, *actual))
+            {
+                source.changed(rebind);
+            }
         });
         let status = unsafe {
             AudioObjectAddPropertyListenerBlock(object, &address, ptr::null_mut(), &*callback)
@@ -184,4 +205,29 @@ pub fn subscribe() -> Result<AudioSubscription> {
         }
         Ok(listeners)
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn property_batches_only_notify_the_registered_property() {
+        let mute = address();
+        let alive = Address {
+            selector: u32::from_be_bytes(*b"livn"),
+            scope: GLOBAL,
+            element: 0,
+        };
+        assert!(property_matches(mute, mute));
+        assert!(!property_matches(alive, mute));
+        assert!(!property_matches(mute, alive));
+        assert!(property_matches(
+            mute,
+            Address {
+                selector: u32::from_be_bytes(*b"****"),
+                scope: mute.scope,
+                element: u32::MAX
+            }
+        ));
+    }
 }

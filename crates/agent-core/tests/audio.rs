@@ -22,6 +22,9 @@ struct FakeAudio {
     active: Arc<AtomicUsize>,
     source: Arc<Mutex<Option<AudioNotifier>>>,
     block_first: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    block_registration: Mutex<Option<std::sync::mpsc::Receiver<()>>>,
+    registration_waiting: AtomicBool,
+    writes: AtomicUsize,
 }
 struct Guard {
     source: Arc<Mutex<Option<AudioNotifier>>>,
@@ -49,6 +52,7 @@ impl AudioControl for FakeAudio {
         Ok(value)
     }
     fn set_muted(&self, value: bool) -> Result<()> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
         self.change(value, false);
         Ok(())
     }
@@ -56,6 +60,11 @@ impl AudioControl for FakeAudio {
         self.subscriptions.fetch_add(1, Ordering::SeqCst);
         if self.fail_registration.swap(false, Ordering::SeqCst) {
             anyhow::bail!("Audio service not running");
+        }
+        let registration = self.block_registration.lock().unwrap().take();
+        if let Some(registration) = registration {
+            self.registration_waiting.store(true, Ordering::SeqCst);
+            registration.recv_timeout(std::time::Duration::from_secs(5))?;
         }
         let (source, events) = audio_channel();
         *self.source.lock().unwrap() = Some(source);
@@ -235,4 +244,27 @@ async fn a_failed_initial_read_recovers_without_requiring_a_new_mute_event() {
     until(|| state(&agent) == Some(false)).await;
     task.abort();
     let _ = task.await;
+}
+
+#[tokio::test]
+async fn a_healthy_rebind_does_not_make_a_muted_switch_briefly_unavailable() {
+    let audio = Arc::new(FakeAudio::default());
+    audio.muted.store(true, Ordering::SeqCst);
+    let (_dir, agent) = fixture(audio.clone());
+    enable(&agent, true);
+    let task = tokio::spawn(agent.clone().watch_audio());
+    until(|| state(&agent) == Some(true)).await;
+    let (ready, registration) = std::sync::mpsc::channel();
+    *audio.block_registration.lock().unwrap() = Some(registration);
+    audio.change(true, true);
+    until(|| audio.registration_waiting.load(Ordering::SeqCst)).await;
+    let during_rebind = state(&agent);
+    ready.send(()).unwrap();
+    until(|| audio.reads.load(Ordering::SeqCst) >= 2).await;
+    let after_rebind = state(&agent);
+    task.abort();
+    let _ = task.await;
+    assert_eq!(during_rebind, Some(true));
+    assert_eq!(after_rebind, Some(true));
+    assert_eq!(audio.writes.load(Ordering::SeqCst), 0);
 }

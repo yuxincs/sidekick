@@ -91,6 +91,10 @@ async fn main() -> anyhow::Result<()> {
                 let Some(line) = line else {break;};
                 if line == "external_mute" { audio.set_muted(true)?; }
                 else if line == "external_unmute" { audio.set_muted(false)?; }
+                else if line == "audio_rebind" {
+                    audio.2.store(true, std::sync::atomic::Ordering::SeqCst);
+                    if let Some(source) = audio.1.lock().unwrap().as_ref() { source.changed(true); }
+                }
                 else if line == "disconnect" { connector.disconnect().await?; }
                 else if let Ok(exposure) = serde_json::from_str::<Exposure>(&line) { agent.set_exposure(exposure)?; }
             }
@@ -103,11 +107,16 @@ async fn main() -> anyhow::Result<()> {
 struct AudioStub(
     std::sync::atomic::AtomicBool,
     std::sync::Mutex<Option<host_agent_core::audio::AudioNotifier>>,
+    std::sync::atomic::AtomicBool,
 );
 impl AudioControl for AudioStub {
     fn subscribe(&self) -> anyhow::Result<host_agent_core::audio::AudioSubscription> {
+        if self.2.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            std::thread::sleep(Duration::from_millis(150));
+        }
         let (source, events) = host_agent_core::audio::audio_channel();
         *self.1.lock().unwrap() = Some(source);
+        println!("{}", serde_json::json!({"phase": "audio_subscribed"}));
         Ok(host_agent_core::audio::AudioSubscription::new(events, ()))
     }
     fn muted(&self) -> anyhow::Result<bool> {

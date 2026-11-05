@@ -232,10 +232,12 @@ impl Agent {
                     }
                 }
             }
-            self.publish_audio(generation, None);
             if reconnect_immediately {
+                // A routine device refresh is not a failed state read. Keep the
+                // last value until the new subscription supplies a value/error.
                 continue;
             }
+            self.publish_audio(generation, None);
             tokio::select! {
                 _ = policy.changed() => {},
                 _ = tokio::time::sleep(retry) => { retry = (retry * 2).min(Duration::from_secs(30)); },

@@ -25,6 +25,8 @@ Home Assistant may be on a hostname or IP, but the certificate must match that a
 | Windows 10/11 x64 | `-Setup.exe` / portable `.zip` | Install per user or keep the portable executable in a permanent directory. |
 | Linux x64, glibc 2.35+ | `.deb` / `.tar.gz` | Install the Debian package, or extract the tarball and run `./install.sh` for a per-user install. |
 
+Desktop version 0.2.1 keeps the last mute value during a healthy subscription refresh, avoiding a temporary unavailable switch. Quit the running app before replacing it, then launch the new copy. The Home Assistant component is unchanged by this desktop fix.
+
 The tray has Connection settings, Start at login, CPU exposure, RAM exposure, shutdown permission, audio permission, and Quit. Start at login is opt-in and uses a per-user LaunchAgent, Windows Run entry, or XDG autostart file. It starts in a desktop login session, not as a pre-login system service. Moving an app requires re-enabling startup from its new location. Quit stops the current process without removing the login preference.
 
 Settings use a native desktop window rendered by egui/eframe, with shared Rust UI code on all three platforms. There is no web server, browser, or webview. Closing settings hides the window while Sidekick keeps running in the tray; Connection settings reopens it. Pairing runs asynchronously so the window stays responsive. Startup can also be configured in the window.

@@ -151,3 +151,31 @@ async def test_rust_mute_switch_state_permission_and_disconnect(hass, rust_agent
 
     with pytest.raises(HomeAssistantError, match="unavailable"):
         await MuteSwitch(entry.runtime_data).async_turn_on()
+
+
+async def test_muted_switch_stays_on_through_healthy_audio_resubscription(hass, rust_agent):
+    from homeassistant.const import EVENT_STATE_CHANGED
+
+    process, entry, manager, states = rust_agent
+    entity = "switch.test_desktop_mute"
+    process.stdin.write(b"external_mute\n")
+    await process.stdin.drain()
+    await eventually(lambda: hass.states.get(entity).state == "on")
+    transitions = []
+
+    def record(event):
+        if event.data["entity_id"] == entity and (state := event.data.get("new_state")):
+            transitions.append(state.state)
+
+    unsubscribe = hass.bus.async_listen(EVENT_STATE_CHANGED, record)
+    try:
+        subscriptions = sum(state["phase"] == "audio_subscribed" for state in states)
+        process.stdin.write(b"audio_rebind\n")
+        await process.stdin.drain()
+        await eventually(lambda: sum(state["phase"] == "audio_subscribed" for state in states) > subscriptions)
+        await hass.async_block_till_done()
+        assert hass.states.get(entity).state == "on"
+        assert all(state == "on" for state in transitions), transitions
+        assert entry.runtime_data.connected
+    finally:
+        unsubscribe()
