@@ -151,11 +151,14 @@ impl Tray {
             &audio,
             &quit,
         ])?;
-        let icon = TrayIconBuilder::new()
+        let builder = TrayIconBuilder::new()
             .with_tooltip("Sidekick")
-            .with_menu(Box::new(menu))
-            .with_icon(Icon::from_rgba(icon_rgba(), 32, 32)?)
-            .build()?;
+            .with_menu(Box::new(menu));
+        #[cfg(target_os = "macos")]
+        let builder = builder.with_icon_templated(Icon::from_rgba(render_icon(true), 32, 32)?);
+        #[cfg(not(target_os = "macos"))]
+        let builder = builder.with_icon(Icon::from_rgba(icon_rgba(), 32, 32)?);
+        let icon = builder.build()?;
         Ok(Self {
             agent,
             startup,
@@ -173,6 +176,10 @@ impl Tray {
 }
 
 pub fn icon_rgba() -> Vec<u8> {
+    render_icon(false)
+}
+
+fn render_icon(template: bool) -> Vec<u8> {
     let mut rgba = vec![0u8; 32 * 32 * 4];
     for y in 3..29 {
         for x in 3..29 {
@@ -181,11 +188,15 @@ pub fn icon_rgba() -> Vec<u8> {
                 && ((7..11).contains(&y) || (14..18).contains(&y) || (21..25).contains(&y)))
                 || ((7..11).contains(&x) && (7..18).contains(&y))
                 || ((21..25).contains(&x) && (14..25).contains(&y));
-            rgba[i..i + 4].copy_from_slice(if bright {
-                &[255, 255, 255, 255]
-            } else {
-                &[32, 130, 220, 255]
-            });
+            // A template uses only the S glyph's alpha mask, leaving macOS to
+            // choose its appearance for the menu bar and highlighted menus.
+            let pixel = match (template, bright) {
+                (true, true) => [0, 0, 0, 255],
+                (true, false) => [0, 0, 0, 0],
+                (false, true) => [255, 255, 255, 255],
+                (false, false) => [32, 130, 220, 255],
+            };
+            rgba[i..i + 4].copy_from_slice(&pixel);
         }
     }
     rgba
