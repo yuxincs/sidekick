@@ -26,13 +26,14 @@ ASSETS = ROOT / "packaging"
 APP_ID = "dev.HostAgent.HostAgent"
 
 
-def png(size: int) -> bytes:
+def png(size: int, *, trim: bool = False) -> bytes:
     """Render the Sidekick S tray mark at app-icon resolution."""
     rows = bytearray()
+    extent, offset = (240, 8) if trim else (256, 0)
     for y in range(size):
         rows.append(0)
         for x in range(size):
-            px, py = (x + 0.5) * 256 / size, (y + 0.5) * 256 / size
+            px, py = offset + (x + 0.5) * extent / size, offset + (y + 0.5) * extent / size
             dx, dy = max(56 - px, 0, px - 200), max(56 - py, 0, py - 200)
             inside = 8 <= px <= 248 and 8 <= py <= 248 and dx * dx + dy * dy <= 48 * 48
             mark = (
@@ -243,7 +244,8 @@ def package_integration(out: Path, version: str) -> Path:
     with zipfile.ZipFile(integration, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(ROOT / "LICENSE", "custom_components/sidekick/LICENSE")
         for path in sorted((ROOT / "custom_components/sidekick").rglob("*")):
-            if path.suffix in (".py", ".json") and "__pycache__" not in path.parts:
+            is_brand = path.parent == ROOT / "custom_components/sidekick/brand" and path.suffix == ".png"
+            if path.is_file() and (path.suffix in (".py", ".json") or is_brand) and "__pycache__" not in path.parts:
                 archive.write(path, path.relative_to(ROOT))
     return integration
 

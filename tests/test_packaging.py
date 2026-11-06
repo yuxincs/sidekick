@@ -143,4 +143,9 @@ def test_integration_archive_installs_only_the_sidekick_domain(tmp_path):
             "LICENSE",
         ):
             assert f"custom_components/sidekick/{filename}" in names
+        for filename, size in (("icon.png", 256), ("icon@2x.png", 512)):
+            image = package.read(f"custom_components/sidekick/brand/{filename}")
+            assert image.startswith(b"\x89PNG\r\n\x1a\n")
+            assert struct.unpack(">II", image[16:24]) == (size, size)
+            assert image == (ROOT / "custom_components/sidekick/brand" / filename).read_bytes()
         assert not any("__pycache__" in name for name in names)

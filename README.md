@@ -17,6 +17,8 @@ The HASS integration creates CPU and RAM percentage sensors, a shutdown button, 
 
 Home Assistant may be on a hostname or IP, but the certificate must match that address. Private CAs can be trusted through your OS certificate store. There is no option to disable certificate verification or pair over plaintext LAN connections. One Sidekick installation connects to one Home Assistant instance at a time.
 
+The integration bundles Sidekick’s S icon in standard and high-resolution sizes. Home Assistant 2026.3 or later displays this local branding; earlier supported versions continue to work without it. After updating the integration, restart Home Assistant to load the branding.
+
 ## Desktop apps and startup
 
 | Platform | Package | Installation |
