@@ -1,4 +1,6 @@
-<img src="custom_components/sidekick/brand/icon@2x.png" alt="Sidekick logo" width="96" height="96" align="right">
+<p align="center">
+  <img src="custom_components/sidekick/brand/icon@2x.png" alt="Sidekick logo" width="96" height="96">
+</p>
 
 # Sidekick
 
