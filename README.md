@@ -1,4 +1,13 @@
+<img src="custom_components/sidekick/brand/icon@2x.png" alt="Sidekick logo" width="96" height="96" align="right">
+
 # Sidekick
+
+[![Tests](https://github.com/yuxincs/sidekick/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/yuxincs/sidekick/actions/workflows/test.yml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Rust: 2024 edition](https://img.shields.io/badge/Rust-2024_edition-orange?logo=rust)](Cargo.toml)
+[![Platforms: macOS, Windows, Linux](https://img.shields.io/badge/Platforms-macOS%20%7C%20Windows%20%7C%20Linux-2082dc)](#desktop-apps-and-startup)
+[![Home Assistant: 2026.2.3+](https://img.shields.io/badge/Home_Assistant-2026.2.3%2B-18bcf2?logo=homeassistant&logoColor=white)](#pair-a-computer)
+[![HACS: Custom integration](https://img.shields.io/badge/HACS-Custom_integration-41bdf5)](#pair-a-computer)
 
 A standalone desktop companion for Home Assistant on Windows, macOS, and Linux. Sidekick opens an **outbound encrypted WebSocket** to Home Assistant, pushes CPU/RAM usage, and receives permitted shutdown and speaker mute/unmute requests. Desktop machines need no LAN listener or inbound firewall exception.
 
