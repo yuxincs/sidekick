@@ -38,8 +38,6 @@ The integration bundles Sidekick’s S icon in standard and high-resolution size
 | Windows 10/11 x64 | `-Setup.exe` / portable `.zip` | Install per user or keep the portable executable in a permanent directory. |
 | Linux x64, glibc 2.35+ | `.deb` / `.tar.gz` | Install the Debian package, or extract the tarball and run `./install.sh` for a per-user install. |
 
-Desktop version 0.2.1 keeps the last mute value during a healthy subscription refresh, avoiding a temporary unavailable switch. Quit the running app before replacing it, then launch the new copy. The Home Assistant component is unchanged by this desktop fix.
-
 The tray has Connection settings, Start at login, CPU exposure, RAM exposure, shutdown permission, audio permission, and Quit. Start at login is opt-in and uses a per-user LaunchAgent, Windows Run entry, or XDG autostart file. It starts in a desktop login session, not as a pre-login system service. Moving an app requires re-enabling startup from its new location. Quit stops the current process without removing the login preference.
 
 Settings use a native desktop window rendered by egui/eframe, with shared Rust UI code on all three platforms. There is no web server, browser, or webview. Closing settings hides the window while Sidekick keeps running in the tray; Connection settings reopens it. Pairing runs asynchronously so the window stays responsive. Startup can also be configured in the window.
@@ -48,7 +46,7 @@ Standalone apps need no Rust or Python installation. macOS uses OS frameworks; W
 
 Shutdown uses Windows shutdown.exe, macOS System Events, or systemctl poweroff on Linux. It does not elevate privileges or install a privileged helper. macOS may request Automation permission; Linux requires systemd and local power-management authorization. A failed OS command reports an error to HASS. Requests expire after ten seconds and are never replayed on reconnect; severely skewed clocks are rejected. A machine may power off before its acknowledgement arrives, so HASS may report an unknown outcome.
 
-Speaker mute controls the default playback output, never the microphone or volume level. The permission also exposes its current mute state, updated through system notifications and immediately after an action. macOS uses CoreAudio property listeners; Windows uses endpoint-volume and default-device callbacks. Linux uses a persistent `pw-dump --monitor` stream with `wpctl` (PipeWire/WirePlumber), or `pactl subscribe` (PulseAudio or PipeWire's PulseAudio compatibility service). Linux needs `wpctl` plus `pw-dump`, or `pactl`. A healthy audio subscription is never polled. Subscription failures clear the mute state and retry with backoff; default-output changes reattach the native listeners. Disabling audio sharing detaches its subscription. Outputs without mute support or a working audio session appear unavailable. Audio permission defaults to off, including after an upgrade.
+Speaker mute controls the default playback output, never the microphone or volume level. The permission also exposes its current mute state, updated through system notifications and immediately after an action. macOS uses CoreAudio property listeners; Windows uses endpoint-volume and default-device callbacks. Linux uses a persistent `pw-dump --monitor` stream with `wpctl` (PipeWire/WirePlumber), or `pactl subscribe` (PulseAudio or PipeWire's PulseAudio compatibility service). Linux needs `wpctl` plus `pw-dump`, or `pactl`. A healthy audio subscription is never polled. Subscription failures clear the mute state and retry with backoff; default-output changes reattach the native listeners. Disabling audio sharing detaches its subscription. Outputs without mute support or a working audio session appear unavailable. Audio permission defaults to off.
 
 ## Revoke, disconnect, or pair again
 
@@ -56,12 +54,6 @@ Speaker mute controls the default playback output, never the microphone or volum
 - Use HASS's **Reconfigure** action to generate a new pairing code for the same computer. The persistent device UUID must match, preserving existing entities.
 - Sidekick's **Disconnect** clears its saved local enrollment and credential. Revoke the old pairing in HASS if it is no longer needed.
 - Uninstall: disable Start at login and quit first. Use Installed apps on Windows, delete the macOS app, or run `~/.local/share/host-agent/uninstall.sh` for a per-user Linux install (adjust for XDG_DATA_HOME). User settings are retained.
-
-Version 0.1 configurations retain their device UUID and exposure choices. Old inbound agent tokens/ports are discarded when settings are saved. The Home Assistant integration now uses the domain `sidekick`. The desktop binary is now named `sidekick` (`sidekick.exe` on Windows). Existing package IDs, bundle identifier, and config directories remain stable for compatibility. After upgrading from `host-agent`, re-enable Start at login so its registration points to the renamed executable. Version 0.2 does not serve the old LAN WebSocket or mDNS service.
-
-## Upgrade from the old Home Assistant domain
-
-Existing `host_agent` config entries do not automatically become `sidekick` entries. Before replacing the integration, remove its old entries in Home Assistant's Devices & services settings. Replace `custom_components/host_agent` with `custom_components/sidekick` from the new archive, restart Home Assistant, and add Sidekick to pair each computer again. Install only one of the two directories: both register the same WebSocket endpoints. Desktop identity and local permission settings are retained; check entity references in your automations after pairing again.
 
 ## Authentication and credentials
 
@@ -106,7 +98,7 @@ HASS reuses its HTTP listener and aiohttp WebSockets. `/api/sidekick/pair` accep
 
 Ping/pong checks run every 15 seconds; silent peers time out. Sidekick reconnects with exponential delays capped at 60 seconds and sends a fresh snapshot. Action IDs, expiration, up to four workers per connection, and local permission checks prevent automatic replay or delayed shutdown. HASS never polls for metrics or opens a connection to a desktop.
 
-Config lives in the existing OS per-user application config directory (dev.HostAgent.HostAgent on macOS, HostAgent\HostAgent on Windows, hostagent on Linux). For portable/headless operation or isolated tests, pass `--config-dir PATH`.
+Settings are stored in the OS per-user application config directory. For portable/headless operation or isolated tests, pass `--config-dir PATH`.
 
 ## Build, test, and package
 
@@ -122,7 +114,7 @@ uv run ruff format --check custom_components tests scripts
 uv run pytest -q
 ```
 
-The test agent is a loopback-only test harness with deterministic metrics and harmless fake power and audio backends. Tests cover the real Rust client and HASS pairing/config-flow/entity lifecycle, TLS trust and rejection, native pairing input validation, audio permissions and state, approval failures, expired/reused codes, wrong-device credentials, reconnects, revocation, migration, and stale actions. Audio tests cover event delivery without metrics ticks, permission changes, stale in-flight reads, device rebinding, stream failure/recovery, and Linux event filtering. No test requests a real OS shutdown, changes host audio, or modifies the user's startup settings.
+The test agent is a loopback-only test harness with deterministic metrics and harmless fake power and audio backends. Tests cover the real Rust client and HASS pairing/config-flow/entity lifecycle, TLS trust and rejection, native pairing input validation, audio permissions and state, approval failures, expired/reused codes, wrong-device credentials, reconnects, revocation, and stale actions. Audio tests cover event delivery without metrics ticks, permission changes, stale in-flight reads, device rebinding, stream failure/recovery, and Linux event filtering. No test requests a real OS shutdown, changes host audio, or modifies the user's startup settings.
 
 For a read-only native audio check, run `cargo run -p sidekick --example audio_watch -- 30` and change mute using your keyboard or system settings. It prints subscription updates and detaches after 30 seconds; it never changes audio itself.
 
