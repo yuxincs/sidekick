@@ -12,6 +12,8 @@ struct Com(bool);
 impl Drop for Com {
     fn drop(&mut self) {
         if self.0 {
+            // SAFETY: Com is created only after successful CoInitializeEx and stays
+            // on that thread. Each successful initialization is balanced exactly once.
             unsafe {
                 CoUninitialize();
             }
@@ -19,7 +21,9 @@ impl Drop for Com {
     }
 }
 fn endpoint<T>(operation: impl FnOnce(IAudioEndpointVolume) -> Result<T>) -> Result<T> {
-    // Initialize the calling worker's COM apartment and release interfaces before uninitializing.
+    // SAFETY: COM is initialized on this calling thread (or its existing apartment
+    // is used for RPC_E_CHANGED_MODE). All interface values are owned and dropped
+    // before the matching Com guard. Calls use valid class IDs and no aggregation.
     unsafe {
         let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
         if initialized != RPC_E_CHANGED_MODE {
@@ -33,10 +37,16 @@ fn endpoint<T>(operation: impl FnOnce(IAudioEndpointVolume) -> Result<T>) -> Res
     }
 }
 pub fn muted() -> Result<bool> {
-    endpoint(|e| Ok(unsafe { e.GetMute()? }.as_bool()))
+    endpoint(|e| {
+        // SAFETY: endpoint supplies a live IAudioEndpointVolume in this thread's
+        // initialized COM apartment; GetMute has no caller-provided pointer inputs.
+        Ok(unsafe { e.GetMute()? }.as_bool())
+    })
 }
 pub fn set_muted(muted: bool) -> Result<()> {
     endpoint(|e| {
+        // SAFETY: The endpoint is live in this COM apartment. The BOOL is valid
+        // and the API permits a null event-context GUID pointer.
         unsafe {
             e.SetMute(muted, std::ptr::null())?;
         }
@@ -65,7 +75,9 @@ struct VolumeCallback {
 }
 impl IAudioEndpointVolumeCallback_Impl for VolumeCallback_Impl {
     fn OnNotify(&self, data: *mut AUDIO_VOLUME_NOTIFICATION_DATA) -> windows::core::Result<()> {
-        // The system owns this buffer for the duration of OnNotify. Only enqueue a signal here.
+        // SAFETY: Windows invokes this private COM callback with a properly aligned,
+        // initialized notification buffer valid until OnNotify returns. as_ref handles
+        // null, and the borrow never escapes. Only the fixed-size mute field is read.
         if let Some(data) = unsafe { data.as_ref() } {
             let muted = i8::from(data.bMuted.as_bool());
             if self.last.swap(muted, Ordering::Relaxed) != muted {
@@ -113,6 +125,9 @@ struct Registration {
 }
 impl Drop for Registration {
     fn drop(&mut self) {
+        // SAFETY: These owned interfaces and callback identities remain alive on
+        // the registration thread, with COM still initialized by _com. Unregister
+        // before releasing our references; Windows owns references during callbacks.
         unsafe {
             if let Some((volume, callback)) = &self.volume {
                 let _ = volume.UnregisterControlChangeNotify(callback);
@@ -124,34 +139,40 @@ impl Drop for Registration {
     }
 }
 pub fn subscribe() -> Result<AudioSubscription> {
-    super::native_subscription(|source| unsafe {
-        let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
-        initialized.ok()?;
-        let com = Com(true);
-        let enumerator: IMMDeviceEnumerator =
-            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
-        let device_callback: IMMNotificationClient = DeviceCallback(source.clone()).into();
-        enumerator.RegisterEndpointNotificationCallback(&device_callback)?;
-        // Construct the RAII owner before any further fallible operations.
-        let mut registration = Registration {
-            volume: None,
-            enumerator,
-            device_callback,
-            _com: com,
-        };
-        if let Ok(device) = registration
-            .enumerator
-            .GetDefaultAudioEndpoint(eRender, eConsole)
-        {
-            let volume = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)?;
-            let callback: IAudioEndpointVolumeCallback = VolumeCallback {
-                source,
-                last: AtomicI8::new(-1),
+    super::native_subscription(|source| {
+        // SAFETY: The dedicated worker initializes its own COM apartment. Owned
+        // interfaces and callbacks are retained by Registration, which unregisters
+        // them and releases them on this same worker before uninitializing COM.
+        // All interface arguments are live, and activation uses no aggregation.
+        unsafe {
+            let initialized = CoInitializeEx(None, COINIT_MULTITHREADED);
+            initialized.ok()?;
+            let com = Com(true);
+            let enumerator: IMMDeviceEnumerator =
+                CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+            let device_callback: IMMNotificationClient = DeviceCallback(source.clone()).into();
+            enumerator.RegisterEndpointNotificationCallback(&device_callback)?;
+            // Construct the RAII owner before any further fallible operations.
+            let mut registration = Registration {
+                volume: None,
+                enumerator,
+                device_callback,
+                _com: com,
+            };
+            if let Ok(device) = registration
+                .enumerator
+                .GetDefaultAudioEndpoint(eRender, eConsole)
+            {
+                let volume = device.Activate::<IAudioEndpointVolume>(CLSCTX_ALL, None)?;
+                let callback: IAudioEndpointVolumeCallback = VolumeCallback {
+                    source,
+                    last: AtomicI8::new(-1),
+                }
+                .into();
+                volume.RegisterControlChangeNotify(&callback)?;
+                registration.volume = Some((volume, callback));
             }
-            .into();
-            volume.RegisterControlChangeNotify(&callback)?;
-            registration.volume = Some((volume, callback));
+            Ok(registration)
         }
-        Ok(registration)
     })
 }

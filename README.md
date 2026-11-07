@@ -71,6 +71,8 @@ HASS generates a random 256-bit device credential using Python secrets. Only its
 
 Production device connections always use WSS, system-trusted roots, and normal hostname verification. Revocation closes active sessions; invalid credentials stop retrying until re-pairing. Incoming snapshots and action results have size, schema, and device-identity checks. Shutdown and mute/unmute are allowlisted and checked locally on every invocation. Native WebSocket libraries and TLS implement the transport; no custom cryptography is used.
 
+Rust denies `unsafe` code by default across workspace crates, tests, and examples. The shared core additionally forbids it, so it cannot opt out. Explicit lint exceptions are limited to native audio adapters, Windows Credential Manager, and Windows console/error-dialog calls. Clippy also denies undocumented unsafe blocks: each boundary must explain its safety invariants with a `// SAFETY:` comment. Dependencies have their own safety policies.
+
 ## Architecture
 
 ```text

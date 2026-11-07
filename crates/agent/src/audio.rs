@@ -5,9 +5,11 @@ use host_agent_core::{audio::AudioSubscription, service::AudioControl};
 #[path = "audio/linux_events.rs"]
 mod linux_events;
 #[cfg(target_os = "macos")]
+#[expect(unsafe_code, reason = "CoreAudio FFI and property-listener callbacks")]
 #[path = "audio/macos.rs"]
 mod platform;
 #[cfg(target_os = "windows")]
+#[expect(unsafe_code, reason = "Windows COM audio APIs and callbacks")]
 #[path = "audio/windows.rs"]
 mod platform;
 #[cfg(target_os = "linux")]

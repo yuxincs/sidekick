@@ -26,6 +26,12 @@ fn main() {
         .any(|a| matches!(a.as_str(), "--help" | "--headless"))
     {
         // A GUI executable stays console-free, while explicit CLI use can attach to its parent.
+        #[expect(
+            unsafe_code,
+            reason = "Attach the Windows GUI executable to its parent console"
+        )]
+        // SAFETY: ATTACH_PARENT_PROCESS is the documented sentinel process ID;
+        // AttachConsole takes no borrowed pointers and may safely fail if no parent console exists.
         unsafe {
             windows_sys::Win32::System::Console::AttachConsole(
                 windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
@@ -43,10 +49,13 @@ fn main() {
 }
 
 #[cfg(target_os = "windows")]
+#[expect(unsafe_code, reason = "Windows native error-dialog FFI")]
 fn show_error(message: &str) {
     use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
     let text: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
     let title: Vec<u16> = "Sidekick".encode_utf16().chain(Some(0)).collect();
+    // SAFETY: Both UTF-16 strings are null-terminated and remain alive until the
+    // synchronous dialog returns. A null owner window and these flags are valid.
     unsafe {
         MessageBoxW(
             std::ptr::null_mut(),

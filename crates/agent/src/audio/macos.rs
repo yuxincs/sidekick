@@ -7,6 +7,7 @@ struct Address {
     scope: u32,
     element: u32,
 }
+// SAFETY: Signatures use CoreAudio C ABI types; Address matches AudioObjectPropertyAddress.
 #[link(name = "CoreAudio", kind = "framework")]
 unsafe extern "C" {
     fn AudioObjectGetPropertyData(
@@ -30,7 +31,8 @@ const GLOBAL: u32 = u32::from_be_bytes(*b"glob");
 fn read(object: u32, address: &Address) -> Result<u32> {
     let mut value = 0u32;
     let mut size = size_of::<u32>() as u32;
-    // All properties here are UInt32 and the address/data buffers remain valid for this call.
+    // SAFETY: All callers request UInt32 properties. The repr(C) address and aligned
+    // UInt32 output/size buffers remain valid for this synchronous call; no qualifier is used.
     let status = unsafe {
         AudioObjectGetPropertyData(
             object,
@@ -72,6 +74,8 @@ pub fn muted() -> Result<bool> {
 pub fn set_muted(muted: bool) -> Result<()> {
     let id = device()?;
     let value = u32::from(muted);
+    // SAFETY: The mute property takes a UInt32. Its repr(C) address and initialized
+    // value remain valid for the synchronous call; zero qualifier size permits null.
     let status = unsafe {
         AudioObjectSetPropertyData(
             id,
@@ -92,6 +96,7 @@ pub fn set_muted(muted: bool) -> Result<()> {
 use block2::{Block, RcBlock};
 use host_agent_core::audio::{AudioNotifier, AudioSubscription};
 type Callback = dyn Fn(u32, *const c_void);
+// SAFETY: Signatures use CoreAudio C ABI types; Address matches AudioObjectPropertyAddress.
 #[link(name = "CoreAudio", kind = "framework")]
 unsafe extern "C" {
     fn AudioObjectAddPropertyListenerBlock(
@@ -127,7 +132,9 @@ impl Listener {
                 return;
             }
             // CoreAudio can batch unrelated property addresses into one callback.
-            // Its address array is valid only for the duration of this invocation.
+            // SAFETY: CoreAudio supplies count aligned, initialized AudioObjectPropertyAddress
+            // values in a single buffer, valid for this invocation. Zero/null were handled
+            // above; the borrowed slice never escapes the callback.
             let addresses =
                 unsafe { std::slice::from_raw_parts(data.cast::<Address>(), count as usize) };
             if addresses
@@ -137,6 +144,10 @@ impl Listener {
                 source.changed(rebind);
             }
         });
+        // SAFETY: The address has the CoreAudio C layout. CoreAudio copies/retains
+        // the correctly typed block on success; Listener also owns it until removal.
+        // A null queue requests CoreAudio's internal dispatch queue. Captures are
+        // thread-safe and the callback only reads its borrowed array and signals.
         let status = unsafe {
             AudioObjectAddPropertyListenerBlock(object, &address, ptr::null_mut(), &*callback)
         };
@@ -153,7 +164,9 @@ impl Listener {
 }
 impl Drop for Listener {
     fn drop(&mut self) {
-        // CoreAudio retains the block until removal; captures also stay alive in in-flight invocations.
+        // SAFETY: This is the same object, address, null queue, and block used for
+        // registration. All remain alive through removal. CoreAudio retains its block
+        // copies, including captures, for any invocation still in flight.
         unsafe {
             AudioObjectRemovePropertyListenerBlock(
                 self.object,
