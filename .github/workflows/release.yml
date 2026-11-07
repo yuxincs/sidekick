@@ -1,12 +1,36 @@
-name: Desktop packages
+name: Release
 on:
   workflow_dispatch:
   push:
     tags: ["v*"]
 permissions:
   contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Validate version and generate commit notes
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python scripts/release_notes.py --tag "$RELEASE_TAG" --repository "$GITHUB_REPOSITORY" --output release-notes.md
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
   package:
+    needs: prepare
     strategy:
       matrix:
         include:
@@ -57,3 +81,50 @@ jobs:
           name: Sidekick-${{ matrix.platform }}-${{ matrix.arch }}
           path: dist/*
           if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Sidekick-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+      - name: Reconcile shared integration ZIP checksums
+        # Each platform produces an integration ZIP. After merging, all checksum
+        # manifests must reference the single ZIP that will be published.
+        run: |
+          python3 - <<'PYTHON'
+          import hashlib
+          from pathlib import Path
+          root = Path("dist")
+          for manifest in root.glob("*-SHA256SUMS.txt"):
+              names = [line.split(maxsplit=1)[1] for line in manifest.read_text().splitlines()]
+              manifest.write_text("".join(
+                  f"{hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n"
+                  for name in names
+              ))
+          PYTHON
+      - name: Publish release notes and packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+            gh release edit "$RELEASE_TAG" --notes-file release-notes.md
+          else
+            flags=()
+            if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
+              flags+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
+          fi
