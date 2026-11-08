@@ -104,6 +104,8 @@ def test_debian_package_has_expected_layout_and_no_automatic_startup(binary, tmp
     control = (root / "DEBIAN/control").read_text()
     assert "Architecture: amd64" in control
     assert "Version: 1.2.3" in control
+    assert "libvulkan1" in control
+    assert "mesa-vulkan-drivers | vulkan-icd" in control
     assert (root / "usr/bin/sidekick").read_bytes() == binary.read_bytes()
     assert (root / "usr/share/applications/host-agent.desktop").is_file()
     assert not (root / "etc/xdg/autostart").exists()

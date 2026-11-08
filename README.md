@@ -40,9 +40,9 @@ The integration bundles Sidekick’s S icon in standard and high-resolution size
 
 The tray has Connection settings, Start at login, CPU exposure, RAM exposure, shutdown permission, audio permission, and Quit. Start at login is opt-in and uses a per-user LaunchAgent, Windows Run entry, or XDG autostart file. It starts in a desktop login session, not as a pre-login system service. Moving an app requires re-enabling startup from its new location. Quit stops the current process without removing the login preference.
 
-Settings use a native desktop window rendered by egui/eframe, with shared Rust UI code on all three platforms. There is no web server, browser, or webview. Closing settings hides the window while Sidekick keeps running in the tray; Connection settings reopens it. Pairing runs asynchronously so the window stays responsive. Startup can also be configured in the window.
+Settings use a native desktop window rendered by egui/eframe, with shared Rust UI code on all three platforms. Rendering uses wgpu with Metal on macOS, DirectX 12 on Windows, and Vulkan on Linux. There is no web server, browser, or webview. Closing settings hides the window while Sidekick keeps running in the tray; Connection settings reopens it. Pairing runs asynchronously so the window stays responsive. Startup can also be configured in the window.
 
-Standalone apps need no Rust or Python installation. macOS uses OS frameworks; Windows uses system APIs (MSVC CI builds statically link the CRT); Linux uses the desktop's D-Bus/X11/Wayland facilities. Linux tray support requires a StatusNotifierItem host, such as KDE or an AppIndicator extension on GNOME. A headless mode is also available.
+Standalone apps need no Rust or Python installation. macOS uses OS frameworks; Windows uses system APIs (MSVC CI builds statically link the CRT); Linux uses the desktop's D-Bus/X11/Wayland facilities. The Linux settings window requires a Vulkan loader and a working Vulkan driver (for example, `libvulkan1` and `mesa-vulkan-drivers` on Debian/Ubuntu). Linux tray support requires a StatusNotifierItem host, such as KDE or an AppIndicator extension on GNOME. A headless mode is also available.
 
 Shutdown uses Windows shutdown.exe, macOS System Events, or systemctl poweroff on Linux. It does not elevate privileges or install a privileged helper. macOS may request Automation permission; Linux requires systemd and local power-management authorization. A failed OS command reports an error to HASS. Requests expire after ten seconds and are never replayed on reconnect; severely skewed clocks are rejected. A machine may power off before its acknowledgement arrives, so HASS may report an unknown outcome.
 
@@ -115,6 +115,8 @@ uv run pytest -q
 ```
 
 The test agent is a loopback-only test harness with deterministic metrics and harmless fake power and audio backends. Tests cover the real Rust client and HASS pairing/config-flow/entity lifecycle, TLS trust and rejection, native pairing input validation, audio permissions and state, approval failures, expired/reused codes, wrong-device credentials, reconnects, revocation, and stale actions. Audio tests cover event delivery without metrics ticks, permission changes, stale in-flight reads, device rebinding, stream failure/recovery, and Linux event filtering. No test requests a real OS shutdown, changes host audio, or modifies the user's startup settings.
+
+For an opt-in GPU smoke check, run `cargo test -p sidekick --test render -- --ignored --nocapture` on a machine with a working graphics backend. It renders an egui frame into an offscreen texture without opening a window or changing settings. This check is skipped by the default test suite because CI runners may not have a GPU.
 
 For a read-only native audio check, run `cargo run -p sidekick --example audio_watch -- 30` and change mute using your keyboard or system settings. It prints subscription updates and detaches after 30 seconds; it never changes audio itself.
 

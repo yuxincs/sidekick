@@ -212,7 +212,7 @@ def stage_deb(binary: Path, destination: Path, version: str, arch: str) -> Path:
     )
     architecture = {"x86_64": "amd64", "aarch64": "arm64"}[arch]
     (deb / "DEBIAN/control").write_text(
-        f"Package: host-agent\nVersion: {version}\nArchitecture: {architecture}\nMaintainer: Sidekick contributors\nSection: utils\nPriority: optional\nDepends: libc6 (>= 2.35), libgcc-s1\nRecommends: pulseaudio-utils | wireplumber, pulseaudio-utils | pipewire-bin, libegl1, libgl1, dbus-user-session, libx11-6, libxcb1, libxkbcommon0, libwayland-client0\nDescription: Local Home Assistant desktop agent\n Pushes host metrics and exposes locally permitted actions over WebSockets.\n Configure capabilities and login startup from the desktop tray.\n"
+        f"Package: host-agent\nVersion: {version}\nArchitecture: {architecture}\nMaintainer: Sidekick contributors\nSection: utils\nPriority: optional\nDepends: libc6 (>= 2.35), libgcc-s1\nRecommends: pulseaudio-utils | wireplumber, pulseaudio-utils | pipewire-bin, libvulkan1, mesa-vulkan-drivers | vulkan-icd, dbus-user-session, libx11-6, libxcb1, libxkbcommon0, libwayland-client0\nDescription: Local Home Assistant desktop agent\n Pushes host metrics and exposes locally permitted actions over WebSockets.\n Configure capabilities and login startup from the desktop tray.\n"
     )
     return deb
 

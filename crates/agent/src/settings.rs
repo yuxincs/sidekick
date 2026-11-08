@@ -40,6 +40,7 @@ impl PairForm {
 pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Result<()> {
     let show = agent.enrollment().is_none();
     let options = eframe::NativeOptions {
+        renderer: eframe::Renderer::Wgpu,
         viewport: egui::ViewportBuilder::default()
             .with_title("Sidekick Settings")
             .with_inner_size([640.0, 820.0])
