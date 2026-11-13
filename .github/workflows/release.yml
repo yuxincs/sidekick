@@ -61,11 +61,10 @@ jobs:
           cargo build --release --locked --target aarch64-apple-darwin
           cargo build --release --locked --target x86_64-apple-darwin
           python3 scripts/package.py --platform macos --arch universal --binary target/aarch64-apple-darwin/release/sidekick --second-binary target/x86_64-apple-darwin/release/sidekick
-      - name: Build Windows app and per-user installer
+      - name: Build standalone Windows executable
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          choco install nsis -y --no-progress
           cargo build --release --locked --target x86_64-pc-windows-msvc
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/package.py --platform windows --arch x86_64 --binary target/x86_64-pc-windows-msvc/release/sidekick.exe

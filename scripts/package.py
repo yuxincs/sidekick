@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 from pathlib import Path
 import plistlib
 import shutil
@@ -166,31 +165,13 @@ def package_mac(args, stage: Path, prefix: str) -> None:
         subprocess.run(["xcrun", "stapler", "staple", dmg], check=True)
 
 
-def package_windows(args, stage: Path, prefix: str) -> None:
-    shutil.copy2(args.binary, stage / "sidekick.exe")
-    shutil.copy2(ROOT / "LICENSE", stage)
-    (stage / "README.txt").write_text(
-        "Run sidekick.exe from a permanent location, or use the installer.\nConfigure capabilities, pairing, and Start at login from its tray.\nQuit before installing updates.\n"
-    )
-    zip_tree(stage, args.out / f"{prefix}.zip")
-    compiler = shutil.which("makensis")
-    if compiler is None:
-        candidate = Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "NSIS/makensis.exe"
-        compiler = str(candidate) if candidate.is_file() else None
-    if compiler is None:
-        raise RuntimeError("NSIS is required to build the Windows installer; install NSIS and retry")
-    flag = "/D" if os.name == "nt" else "-D"
-    subprocess.run(
-        [
-            compiler,
-            f"{flag}VERSION={args.version}",
-            f"{flag}BINARY={args.binary}",
-            f"{flag}LICENSE_FILE={ROOT / 'LICENSE'}",
-            f"{flag}OUTPUT={args.out / (prefix + '-Setup.exe')}",
-            str(ASSETS / "windows.nsi"),
-        ],
-        check=True,
-    )
+def package_windows(args, prefix: str) -> list[Path]:
+    """Publish a standalone executable; the license is a separate release asset."""
+    executable = args.out / f"{prefix}.exe"
+    license_file = args.out / "LICENSE.txt"
+    shutil.copy2(args.binary, executable)
+    shutil.copy2(ROOT / "LICENSE", license_file)
+    return [executable, license_file]
 
 
 def stage_deb(binary: Path, destination: Path, version: str, arch: str) -> Path:
@@ -279,7 +260,7 @@ def main() -> None:
         if args.platform == "macos":
             package_mac(args, stage, prefix)
         elif args.platform == "windows":
-            package_windows(args, stage, prefix)
+            windows_files = package_windows(args, prefix)
         else:
             folder = stage_linux(args.binary, stage)
             with tarfile.open(args.out / f"{prefix}.tar.gz", "w:gz") as archive:
@@ -289,7 +270,8 @@ def main() -> None:
                 ["dpkg-deb", "--root-owner-group", "--build", str(deb), str(args.out / f"{prefix}.deb")], check=True
             )
     integration = package_integration(args.out, args.version)
-    files = sorted(args.out.glob(f"{prefix}.*")) + sorted(args.out.glob(f"{prefix}-Setup.exe")) + [integration]
+    files = windows_files if args.platform == "windows" else sorted(args.out.glob(f"{prefix}.*"))
+    files = [*files, integration]
     manifest = args.out / f"{prefix}-SHA256SUMS.txt"
     manifest.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in files))
     print(f"Packages and checksums: {args.out}")

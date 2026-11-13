@@ -6,6 +6,7 @@ import plistlib
 import shlex
 import struct
 import subprocess
+import sys
 import zipfile
 
 import pytest
@@ -111,14 +112,41 @@ def test_debian_package_has_expected_layout_and_no_automatic_startup(binary, tmp
     assert not (root / "etc/xdg/autostart").exists()
 
 
-def test_windows_installer_uses_only_per_user_registration():
-    installer = (ROOT / "packaging/windows.nsi").read_text()
-    assert "RequestExecutionLevel user" in installer
-    assert "HKLM" not in installer
-    assert (
-        'DeleteRegValue HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run" "dev.HostAgent.HostAgent"' in installer
+def test_windows_package_is_a_standalone_executable_without_installer_tools(tmp_path):
+    binary = tmp_path / "sidekick.exe"
+    image = bytearray(70)
+    image[:2] = b"MZ"
+    image[60:64] = struct.pack("<I", 64)
+    image[64:] = b"PE\0\0" + struct.pack("<H", 0x8664)
+    binary.write_bytes(image)
+    out = tmp_path / "dist"
+    out.mkdir()
+    # Previous packages in a reused output directory must not enter the new checksum list.
+    prefix = "Sidekick-test-windows-x86_64"
+    (out / f"{prefix}.zip").write_bytes(b"previous archive")
+    (out / f"{prefix}-Setup.exe").write_bytes(b"previous installer")
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "scripts/package.py"),
+            "--platform",
+            "windows",
+            "--arch",
+            "x86_64",
+            "--binary",
+            str(binary),
+            "--out",
+            str(out),
+            "--version",
+            "test",
+        ],
+        check=True,
+        capture_output=True,
     )
-    assert 'WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Run"' not in installer
+    assert (out / f"{prefix}.exe").read_bytes() == binary.read_bytes()
+    assert (out / "LICENSE.txt").read_bytes() == (ROOT / "LICENSE").read_bytes()
+    names = [line.split(maxsplit=1)[1] for line in (out / f"{prefix}-SHA256SUMS.txt").read_text().splitlines()]
+    assert names == [f"{prefix}.exe", "LICENSE.txt", "Sidekick-test-home-assistant.zip"]
 
 
 @pytest.mark.parametrize("platform", ["windows", "linux"])

@@ -35,7 +35,7 @@ The integration bundles Sidekick’s S icon in standard and high-resolution size
 | Platform | Package | Installation |
 | --- | --- | --- |
 | macOS 11+ Intel/Apple Silicon | Universal `.dmg` / `.app.zip` | Drag Sidekick to Applications and launch it. The S icon appears in the menu bar. |
-| Windows 10/11 x64 | `-Setup.exe` / portable `.zip` | Install per user or keep the portable executable in a permanent directory. |
+| Windows 10/11 x64 | Standalone `.exe` | Save the executable in a permanent directory and run it. No installation is required. |
 | Linux x64, glibc 2.35+ | `.deb` / `.tar.gz` | Install the Debian package, or extract the tarball and run `./install.sh` for a per-user install. |
 
 The tray has Connection settings, Start at login, CPU exposure, RAM exposure, shutdown permission, audio permission, and Quit. Start at login is opt-in and uses a per-user LaunchAgent, Windows Run entry, or XDG autostart file. It starts in a desktop login session, not as a pre-login system service. Moving an app requires re-enabling startup from its new location. Quit stops the current process without removing the login preference.
@@ -53,7 +53,7 @@ Speaker mute controls the default playback output, never the microphone or volum
 - In HASS's integration options, **Revoke this computer's pairing** immediately disconnects it and invalidates its credential. Removing its config entry also rejects future connections.
 - Use HASS's **Reconfigure** action to generate a new pairing code for the same computer. The persistent device UUID must match, preserving existing entities.
 - Sidekick's **Disconnect** clears its saved local enrollment and credential. Revoke the old pairing in HASS if it is no longer needed.
-- Uninstall: disable Start at login and quit first. Use Installed apps on Windows, delete the macOS app, or run `~/.local/share/host-agent/uninstall.sh` for a per-user Linux install (adjust for XDG_DATA_HOME). User settings are retained.
+- Remove Sidekick: disable Start at login and quit first. Delete the Windows executable or macOS app, or run `~/.local/share/host-agent/uninstall.sh` for a per-user Linux install (adjust for XDG_DATA_HOME). User settings are retained.
 
 ## Authentication and credentials
 
@@ -120,9 +120,9 @@ For an opt-in GPU smoke check, run `cargo test -p sidekick --test render -- --ig
 
 For a read-only native audio check, run `cargo run -p sidekick --example audio_watch -- 30` and change mute using your keyboard or system settings. It prints subscription updates and detaches after 30 seconds; it never changes audio itself.
 
-Run `cargo run -p sidekick` for the tray, or `sidekick --headless --config-dir PATH`. Headless mode runs an existing enrollment without a settings window or tray; pair and configure through the desktop app first. Release workflow builds native desktop packages on macOS, Windows, and Linux. Package generation uses Python 3.11+: `uv run python scripts/package.py --platform macos --arch aarch64 --binary target/release/sidekick`. Universal macOS builds additionally take `--arch universal --second-binary <intel-binary>`; Windows needs NSIS, Linux needs dpkg-deb. Outputs, integration ZIP, licenses, and checksums are in dist/.
+Run `cargo run -p sidekick` for the tray, or `sidekick --headless --config-dir PATH`. Headless mode runs an existing enrollment without a settings window or tray; pair and configure through the desktop app first. Release workflow builds native desktop packages on macOS, Windows, and Linux. Package generation uses Python 3.11+: `uv run python scripts/package.py --platform macos --arch aarch64 --binary target/release/sidekick`. Universal macOS builds additionally take `--arch universal --second-binary <intel-binary>`; Linux packaging needs dpkg-deb. Windows packaging copies the standalone executable and includes the license as a separate release asset. Outputs, integration ZIP, licenses, and checksums are in dist/.
 
-Local macOS apps are ad-hoc signed; public distribution requires Developer ID signing/notarization. The packager supports `--sign-identity` and `--notary-profile`. Windows installers are unsigned until signed with your certificate. Pushing a version tag such as `v0.2.2` publishes a GitHub release after all platform package builds succeed. The tag must match the workspace version in `Cargo.toml`. Release notes list commit messages since the nearest reachable version tag, with commit and comparison links; the first release includes the full history. Tags with a prerelease suffix are marked as prereleases. Installers, portable packages, the Home Assistant integration ZIP, and checksums are attached. Manual workflow runs build artifacts without publishing a release. Native GUI/startup and real shutdown/audio acceptance still require each target OS.
+Local macOS apps are ad-hoc signed; public distribution requires Developer ID signing/notarization. The packager supports `--sign-identity` and `--notary-profile`. Windows executables are unsigned until signed with your certificate. Pushing a version tag such as `v0.2.2` publishes a GitHub release after all platform package builds succeed. The tag must match the workspace version in `Cargo.toml`. Release notes list commit messages since the nearest reachable version tag, with commit and comparison links; the first release includes the full history. Tags with a prerelease suffix are marked as prereleases. Desktop downloads, the Home Assistant integration ZIP, licenses, and checksums are attached. Manual workflow runs build artifacts without publishing a release. Native GUI/startup and real shutdown/audio acceptance still require each target OS.
 
 ## License
 
