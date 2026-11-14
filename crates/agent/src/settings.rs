@@ -37,15 +37,14 @@ impl PairForm {
     }
 }
 
-pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Result<()> {
-    let show = agent.enrollment().is_none();
-    let options = eframe::NativeOptions {
+fn native_options(autostart: bool, paired: bool) -> eframe::NativeOptions {
+    eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
         viewport: egui::ViewportBuilder::default()
             .with_title("Sidekick Settings")
             .with_inner_size([640.0, 820.0])
             .with_min_inner_size([460.0, 600.0])
-            .with_visible(show)
+            .with_visible(!autostart && !paired)
             .with_icon(Arc::new(egui::IconData {
                 rgba: crate::tray::icon_rgba(),
                 width: 32,
@@ -60,7 +59,16 @@ pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Res
             let _ = builder;
         })),
         ..Default::default()
-    };
+    }
+}
+
+pub fn run(
+    agent: Arc<Agent>,
+    connector: Arc<Connector>,
+    runtime: Handle,
+    autostart: bool,
+) -> Result<()> {
+    let options = native_options(autostart, agent.enrollment().is_some());
     eframe::run_native(
         "Sidekick",
         options,
@@ -408,6 +416,16 @@ impl Drop for Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_window_is_hidden_even_before_pairing() {
+        for paired in [false, true] {
+            assert_eq!(native_options(true, paired).viewport.visible, Some(false));
+        }
+        assert_eq!(native_options(false, false).viewport.visible, Some(true));
+        assert_eq!(native_options(false, true).viewport.visible, Some(false));
+    }
+
     #[test]
     fn pairing_form_validates_before_network_or_credential_changes() {
         let mut form = PairForm {

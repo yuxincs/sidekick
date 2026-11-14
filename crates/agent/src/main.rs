@@ -19,7 +19,7 @@ fn main() {
     #[cfg(any(target_os = "windows", target_os = "macos"))]
     let gui = !args
         .iter()
-        .any(|a| matches!(a.as_str(), "--help" | "--headless"));
+        .any(|a| matches!(a.as_str(), "--help" | "--headless" | "--autostart"));
     #[cfg(target_os = "windows")]
     if args
         .iter()
@@ -162,7 +162,12 @@ fn run(args: Vec<String>) -> Result<()> {
     if args.iter().any(|a| a == "--headless") {
         runtime.block_on(tokio::signal::ctrl_c())?;
     } else {
-        settings::run(agent, connector, runtime.handle().clone())?;
+        settings::run(
+            agent,
+            connector,
+            runtime.handle().clone(),
+            args.iter().any(|a| a == "--autostart"),
+        )?;
     }
     connection_task.abort();
     sampler.abort();
