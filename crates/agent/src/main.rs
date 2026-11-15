@@ -162,12 +162,7 @@ fn run(args: Vec<String>) -> Result<()> {
     if args.iter().any(|a| a == "--headless") {
         runtime.block_on(tokio::signal::ctrl_c())?;
     } else {
-        settings::run(
-            agent,
-            connector,
-            runtime.handle().clone(),
-            args.iter().any(|a| a == "--autostart"),
-        )?;
+        settings::run(agent, connector, runtime.handle().clone())?;
     }
     connection_task.abort();
     sampler.abort();

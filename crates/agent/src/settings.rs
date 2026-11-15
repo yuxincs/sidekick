@@ -37,14 +37,14 @@ impl PairForm {
     }
 }
 
-fn native_options(autostart: bool, paired: bool) -> eframe::NativeOptions {
+fn native_options(paired: bool) -> eframe::NativeOptions {
     eframe::NativeOptions {
         renderer: eframe::Renderer::Wgpu,
         viewport: egui::ViewportBuilder::default()
             .with_title("Sidekick Settings")
             .with_inner_size([640.0, 820.0])
             .with_min_inner_size([460.0, 600.0])
-            .with_visible(!autostart && !paired)
+            .with_visible(!paired)
             .with_icon(Arc::new(egui::IconData {
                 rgba: crate::tray::icon_rgba(),
                 width: 32,
@@ -62,13 +62,8 @@ fn native_options(autostart: bool, paired: bool) -> eframe::NativeOptions {
     }
 }
 
-pub fn run(
-    agent: Arc<Agent>,
-    connector: Arc<Connector>,
-    runtime: Handle,
-    autostart: bool,
-) -> Result<()> {
-    let options = native_options(autostart, agent.enrollment().is_some());
+pub fn run(agent: Arc<Agent>, connector: Arc<Connector>, runtime: Handle) -> Result<()> {
+    let options = native_options(agent.enrollment().is_some());
     eframe::run_native(
         "Sidekick",
         options,
@@ -418,12 +413,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn startup_window_is_hidden_even_before_pairing() {
-        for paired in [false, true] {
-            assert_eq!(native_options(true, paired).viewport.visible, Some(false));
-        }
-        assert_eq!(native_options(false, false).viewport.visible, Some(true));
-        assert_eq!(native_options(false, true).viewport.visible, Some(false));
+    fn startup_window_is_visible_only_before_pairing() {
+        assert_eq!(native_options(false).viewport.visible, Some(true));
+        assert_eq!(native_options(true).viewport.visible, Some(false));
     }
 
     #[test]
